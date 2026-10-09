@@ -1,0 +1,22 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor Student
+actor Teacher
+actor Admin
+
+rectangle "Learning Management System" {
+    usecase "Manage User Accounts" as UC_Admin
+    usecase "Join Class" as UC_Join
+    usecase "Upload Materials" as UC_Upload
+    usecase "Submit Assignment" as UC_Submit
+    usecase "Grade Submission" as UC_Grade
+}
+
+Admin --> UC_Admin
+Teacher --> UC_Upload
+Teacher --> UC_Grade
+Student --> UC_Join
+Student --> UC_Submit
+@enduml
