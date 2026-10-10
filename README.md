@@ -47,4 +47,3 @@ The Learning Management System (LMS) is an educational platform designed to stre
 │   └── main/
 ├── .gitignore
 ├── README.md
-└── config.json
