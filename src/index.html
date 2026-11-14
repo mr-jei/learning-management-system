@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning Management System (LMS)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px auto; max-width: 850px; line-height: 1.6; color: #222; }
+        h1, h2 { border-bottom: 1px solid #ccc; padding-bottom: 6px; }
+        .card { border: 1px solid #ddd; padding: 20px; margin-bottom: 24px; border-radius: 4px; }
+        .alert { background: #f4f4f4; border-left: 4px solid #222; padding: 12px; margin-bottom: 20px; display: none; }
+        .alert.error { border-left-color: #b00020; color: #b00020; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f9f9f9; }
+        label { display: block; font-weight: bold; margin-top: 10px; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        button { margin-top: 10px; padding: 8px 14px; background: #222; color: #fff; border: none; cursor: pointer; }
+        button:hover { background: #444; }
+    </style>
+</head>
+<body>
+
+    <h1>Learning Management System (LMS)</h1>
+    <p><strong>Course:</strong> <span id="course-info">Loading...</span></p>
+
+    <div id="status-alert" class="alert"></div>
+
+    <!-- STUDENT PORTAL -->
+    <div class="card">
+        <h2>Student Portal — <span id="student-name"></span></h2>
+        <p><strong>Enrollment Status:</strong> <span id="enrollment-status"></span></p>
+
+        <div id="join-section">
+            <form id="join-form">
+                <label for="course-code-input">Join Class via Course Code</label>
+                <input type="text" id="course-code-input" value="CS301" required>
+                <button type="submit">Join Class</button>
+            </form>
+        </div>
+
+        <div id="submit-section" style="display: none;">
+            <form id="submit-form">
+                <label id="assignment-label" for="file-url-input">Submit Assignment</label>
+                <input type="text" id="file-url-input" placeholder="Enter filename or URL (e.g., capstone_v1.pdf)" required>
+                <button type="submit">Submit Assignment</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- TEACHER PORTAL -->
+    <div class="card">
+        <h2>Teacher Portal — <span id="teacher-name"></span></h2>
+        <div id="submissions-container">Loading submissions...</div>
+    </div>
+
+    <script>
+        const API_URL = 'api.php';
+
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showAlert(message, isError = false) {
+            const alertBox = document.getElementById('status-alert');
+            alertBox.textContent = message;
+            alertBox.className = 'alert' + (isError ? ' error' : '');
+            alertBox.style.display = 'block';
+        }
+
+        // Shared request helper: always returns the parsed JSON, even for error responses,
+        // and turns network / non-JSON failures into a readable message.
+        async function apiRequest(body = null) {
+            try {
+                const options = body
+                    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+                    : {};
+                const res = await fetch(API_URL, options);
+                const text = await res.text();
+                try {
+                    return JSON.parse(text);
+                } catch {
+                    return { status: 'error', message: 'Server did not return JSON. Check that PHP/Apache is running and open this page via http://localhost/, not file://. Response: ' + text.slice(0, 200) };
+                }
+            } catch (err) {
+                return { status: 'error', message: 'Could not reach api.php: ' + err.message };
+            }
+        }
+
+        async function loadDashboard() {
+            const data = await apiRequest();
+
+            if (data.status === 'error' || !data.course) {
+                showAlert(data.message || 'Failed to load dashboard.', true);
+                document.getElementById('course-info').textContent = 'Unavailable';
+                document.getElementById('submissions-container').textContent = '';
+                return;
+            }
+
+            document.getElementById('course-info').textContent = `${data.course.title} (${data.course.code})`;
+            document.getElementById('student-name').textContent = data.student.name;
+            document.getElementById('teacher-name').textContent = data.teacher.name;
+            document.getElementById('assignment-label').textContent =
+                `Submit Assignment: ${data.assignment.title} (Due: ${data.assignment.dueDate})`;
+
+            if (data.student.isEnrolled) {
+                document.getElementById('enrollment-status').textContent = `Enrolled in ${data.course.code}`;
+                document.getElementById('join-section').style.display = 'none';
+                document.getElementById('submit-section').style.display = 'block';
+            } else {
+                document.getElementById('enrollment-status').textContent = 'Not Enrolled';
+                document.getElementById('join-section').style.display = 'block';
+                document.getElementById('submit-section').style.display = 'none';
+            }
+
+            renderSubmissions(data.submissions);
+        }
+
+        function renderSubmissions(submissions) {
+            const container = document.getElementById('submissions-container');
+            if (!submissions || submissions.length === 0) {
+                container.innerHTML = '<p>No submissions found in the database yet.</p>';
+                return;
+            }
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Student</th>
+                            <th>File</th>
+                            <th>Submitted At</th>
+                            <th>Grade &amp; Feedback</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            submissions.forEach(sub => {
+                let gradeCell;
+                if (sub.score !== null) {
+                    gradeCell = `
+                        <strong>Score:</strong> ${escapeHtml(sub.score)} / 100<br>
+                        <strong>Feedback:</strong> ${escapeHtml(sub.feedback)}
+                    `;
+                } else {
+                    // data-id + event delegation (below) instead of an inline onsubmit handler
+                    gradeCell = `
+                        <form class="grade-form" data-id="${escapeHtml(sub.submission_id)}">
+                            <input type="number" name="score" placeholder="Score (0-100)" min="0" max="100" step="0.5" required>
+                            <input type="text" name="feedback" placeholder="Write feedback..." required>
+                            <button type="submit">Release Grade</button>
+                        </form>
+                    `;
+                }
+
+                html += `
+                    <tr>
+                        <td>${escapeHtml(sub.submission_id)}</td>
+                        <td>${escapeHtml(sub.student_name)}</td>
+                        <td>${escapeHtml(sub.file_url)}</td>
+                        <td>${escapeHtml(sub.submission_date)}</td>
+                        <td>${gradeCell}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        document.getElementById('join-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const courseCode = document.getElementById('course-code-input').value;
+            const result = await apiRequest({ action: 'join_class', course_code: courseCode });
+            showAlert(result.message, result.status === 'error');
+            loadDashboard();
+        });
+
+        document.getElementById('submit-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileUrl = document.getElementById('file-url-input').value;
+            const result = await apiRequest({ action: 'submit_assignment', file_url: fileUrl });
+            if (result.status !== 'error') {
+                document.getElementById('file-url-input').value = '';
+            }
+            showAlert(result.message, result.status === 'error');
+            loadDashboard();
+        });
+
+        // Grade forms are created dynamically, so listen on the container
+        document.getElementById('submissions-container').addEventListener('submit', async (e) => {
+            const form = e.target.closest('.grade-form');
+            if (!form) return;
+            e.preventDefault();
+            const result = await apiRequest({
+                action: 'grade_submission',
+                submission_id: form.dataset.id,
+                score: form.elements['score'].value,
+                feedback: form.elements['feedback'].value
+            });
+            showAlert(result.message, result.status === 'error');
+            loadDashboard();
+        });
+
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+
+</body>
+</html>
