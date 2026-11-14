@@ -27,7 +27,7 @@ The Learning Management System (LMS) is an educational platform designed to stre
 
 ## Project Structure
 ```text
-.
+.Phase 1
 ├── docs/
 │   └── diagrams/
 │       ├── use_case_diagram.png
@@ -47,3 +47,21 @@ The Learning Management System (LMS) is an educational platform designed to stre
 │   └── main/
 ├── .gitignore
 ├── README.md
+
+
+Phase 2
+learning-management-system/
+├── database.sql
+└── src/
+    ├── config/
+    │   └── Database.php
+    ├── models/
+    │   ├── User.php
+    │   ├── Student.php
+    │   ├── Teacher.php
+    │   ├── Admin.php
+    │   ├── Course.php
+    │   ├── Assignment.php
+    │   ├── Submission.php
+    │   └── Grade.php
+    └── index.php
